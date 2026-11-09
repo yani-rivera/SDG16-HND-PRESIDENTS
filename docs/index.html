@@ -104,6 +104,7 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
         <div>Heads of state born here, so far</div>
         <div class="ramp" id="ramp"></div>
         <div class="ramp"><span class="sw" style="background:#e3dccb"></span> neighbor country of birth</div>
+        <div class="ramp"><svg width="14" height="14" viewBox="-7 -7 14 14"><path d="M0,-6.5L1.6,-2.1L6.2,-2L2.5,0.8L3.8,5.3L0,2.6L-3.8,5.3L-2.5,0.8L-6.2,-2L-1.6,-2.1Z" fill="currentColor"/></svg> capital at the time: Comayagua until 30 Oct 1880, then Tegucigalpa</div>
       </div>
     </div>
 
@@ -143,7 +144,7 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
   <section class="panel notes">
     <h3>Sources and notes</h3>
     <p>Terms: English and Spanish Wikipedia, “List of presidents of Honduras”. Birthplaces researched and validated across several sources by Yanira A. Rivera. Departments: geoBoundaries ADM1 (CC BY 4.0). Neighboring countries: Natural Earth.</p>
-    <p>Births in Honduras are placed at their department, because many towns are unknown; the card still names the town where it is known. Births abroad sit in their country. Where the department is unknown, the point sits at the centre of Honduras with a dashed ring. Collective governments (councils of ministers, provisional governments, juntas) have no single birthplace and sit on their own node off the north coast. On the timeline, a dashed outline marks a de facto term. Party labels are as recorded in the source list.</p>
+    <p>Births in Honduras are placed at their department, because many towns are unknown; the card still names the town where it is known. Births abroad sit in their country. Where the department is unknown, the point sits at the centre of Honduras with a dashed ring. Collective governments (councils of ministers, provisional governments, juntas) have no single birthplace and sit on their own node off the north coast. On the timeline, a dashed outline marks a de facto term. The star marks the capital when each term began: Comayagua until 30 October 1880, when Marco Aurelio Soto moved it to Tegucigalpa (before that, the seat of government at times alternated between the two cities). Party labels are as recorded in the source list.</p>
     <p id="issues"></p>
     <p>Made for the #30DayMapChallenge 2026 · Yanira A. Rivera.</p>
   </section>
@@ -184,7 +185,7 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
   const proj = d3.geoMercator().fitExtent([[18, 18], [W - 18, H - 18]], frame);
   const path = d3.geoPath(proj);
   svg.append('rect').attr('width', W).attr('height', H).attr('fill', '#dfe8ee');
-  const gNb = svg.append('g'), gDep = svg.append('g'), gArc = svg.append('g'), gPts = svg.append('g'), gCur = svg.append('g');
+  const gNb = svg.append('g'), gDep = svg.append('g'), gCap = svg.append('g'), gArc = svg.append('g'), gPts = svg.append('g'), gCur = svg.append('g');
 
   gNb.selectAll('path').data(NB.features).join('path').attr('d', path)
     .attr('fill', '#f1f3f4')
@@ -202,6 +203,22 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
   [1, Math.round(maxCount / 2), maxCount].forEach(v => {
     const s = ramp.append('span'); s.append('span').attr('class', 'sw').style('background', color(v)); s.append('span').text(' ' + v);
   });
+
+  // ---------- seat of government ----------
+  // Comayagua until 30 Oct 1880, when Marco Aurelio Soto moved the capital to Tegucigalpa.
+  // Simplified: before 1880 the seat sometimes alternated between the two cities.
+  const CAPITAL_MOVE = new Date(1880, 9, 30);
+  const CAPITALS = [
+    { name: 'Comayagua', lonlat: [-87.637, 14.460], until: CAPITAL_MOVE },
+    { name: 'Tegucigalpa', lonlat: [-87.206, 14.072], from: CAPITAL_MOVE }
+  ];
+  const capitalAt = d => CAPITALS.find(c => (!c.from || d >= c.from) && (!c.until || d < c.until));
+  const star = d3.symbol().type(d3.symbolStar).size(150)();
+  const capSel = gCap.selectAll('g').data(CAPITALS).join('g')
+    .attr('transform', c => `translate(${proj(c.lonlat)})`);
+  capSel.append('path').attr('d', star).attr('stroke-width', 1.2).attr('stroke-linejoin', 'round');
+  capSel.append('text').attr('x', 10).attr('y', -8).attr('font-size', 11.5).attr('font-weight', 600)
+    .attr('paint-order', 'stroke').attr('stroke', '#fff').attr('stroke-width', 3.5).text(c => c.name);
 
   // nodes follow the printed flow map (v1.3.0): Honduran births sit at their department's node,
   // births abroad at their country, unknown departments at the centre, collective governments on their own node
@@ -300,6 +317,13 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
       return born ? '#e3dccb' : '#f1f3f4';
     });
 
+    // seat of government at the start of this term: filled star; the other city: faint outline
+    const cap = capitalAt(t._s);
+    capSel.attr('opacity', c => c === cap ? 1 : .45);
+    capSel.select('path').attr('fill', c => c === cap ? 'var(--ink)' : 'none').attr('stroke', 'var(--ink)');
+    capSel.select('text').attr('fill', c => c === cap ? 'var(--ink)' : '#7b858e')
+      .text(c => c === cap ? `${c.name} (capital)` : c.name);
+
     // earlier birthplaces as small dots (one per place)
     const places = d3.groups(upto, u => u._nodeKey).map(([, v]) => v[v.length - 1]);
     gPts.selectAll('circle').data(places, d => d._nodeKey).join('circle')
@@ -348,7 +372,8 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
     const people = new Set(upto.map(u => u.person_key)).size;
     const top = [...counts].sort((a, b) => b[1] - a[1])[0];
     const topName = top ? DEP.features.find(f => f.properties.key === top[0]).properties.name : '—';
-    $('stats').innerHTML = `So far: <b>${i + 1}</b> terms · <b>${people}</b> different people · most born in <b>${topName}</b>${top ? ` (${top[1]})` : ''}`;
+    const b = v => { const el = document.createElement('b'); el.textContent = v; return el; };
+    $('stats').replaceChildren('So far: ', b(i + 1), ' terms · ', b(people), ' different people · most born in ', b(topName), top ? ` (${top[1]})` : '');
 
     // timeline + slider
     bars.attr('opacity', u => u.seq - 1 <= i ? 1 : .28)
