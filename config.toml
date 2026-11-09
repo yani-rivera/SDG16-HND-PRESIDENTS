@@ -1,0 +1,21 @@
+# hnd_presidents_viz — builds the data files for the interactive presidents map
+
+[input]
+workbook = "data/hnd_presidentes.xlsx"
+sheet = "Sheet2"                       # machine-readable column names
+departments = "data/hnd_adm1.geojson"  # geoBoundaries ADM1, CRS84
+neighbors_topojson = "data/countries-50m.json"   # Natural Earth via world-atlas 2.0.2
+
+[countries]
+# Natural Earth names of countries of birth outside Honduras, plus context
+birth = ["Nicaragua", "El Salvador", "Panama"]
+context = ["Guatemala", "Belize", "Costa Rica", "Mexico"]
+
+[unknown]
+# birthplace department unknown -> point placed at the centre of Honduras (user decision)
+labels = ["Honduras"]
+lat = 15.0
+lon = -86.3
+
+[output]
+dir = "docs/data"

@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Honduras, Term by Term</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a civic ledger. Header, then map (left) beside the term card and controls (right),
+   then the full-width timeline of every term since 1824. Single light look by design. */
+:root {
+  --paper: #eef1f2;      /* page */
+  --sheet: #ffffff;      /* card surfaces */
+  --ink: #1b2430;        /* text */
+  --muted: #5d6874;      /* secondary text */
+  --rule: #c9d0d6;       /* hairlines, borders */
+  --land: #e2e7ea;       /* departments with no president yet */
+  --flag: #0b6fb8;       /* Honduran blue: arcs, focus, selection */
+  --font-display: "Young Serif", Georgia, "Times New Roman", serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
+header .kicker { font-family: var(--font-data); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+header h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(30px, 4.4vw, 46px); line-height: 1.05; margin: 6px 0 8px; text-wrap: balance; }
+header p { margin: 0; max-width: 68ch; color: var(--muted); }
+
+.main { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .maplegend { position: static; background: none; padding: 6px 10px 10px; } }
+.panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; }
+.mapbox { position: relative; min-width: 0; }
+#map { display: block; width: 100%; height: auto; }
+.maplegend { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--muted); display: grid; gap: 4px; background: rgb(255 255 255 / .85); padding: 6px 8px; border-radius: 4px; }
+.ramp { display: flex; align-items: center; gap: 6px; }
+.ramp span.sw { display: inline-block; width: 14px; height: 10px; border: 1px solid var(--rule); }
+
+.side { display: grid; gap: 14px; min-width: 0; }
+.card { padding: 16px 18px; display: grid; gap: 10px; }
+.card .seq { font-family: var(--font-data); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.card h2 { font-family: var(--font-display); font-weight: 400; font-size: 26px; line-height: 1.15; margin: 0; text-wrap: balance; }
+.card .dates { font-family: var(--font-data); font-size: 13px; font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink); background: var(--paper); }
+.chip.party { color: #fff; border-color: transparent; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 14px; }
+dt { color: var(--muted); }
+dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.card a { color: var(--flag); }
+
+.controls { padding: 12px 14px; display: grid; gap: 10px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+button {
+  font: 500 14px var(--font-body); color: var(--ink); background: var(--sheet);
+  border: 1px solid var(--rule); border-radius: 4px; padding: 7px 12px; cursor: pointer;
+}
+button:hover { border-color: var(--muted); }
+button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px solid var(--flag); outline-offset: 2px; }
+#slider { width: 100%; accent-color: var(--flag); }
+.eras { display: flex; flex-wrap: wrap; gap: 6px; }
+.eras button { font-size: 12px; padding: 4px 8px; }
+.stats { font-size: 13px; color: var(--muted); }
+.stats b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.timeline { padding: 12px 14px 8px; overflow-x: auto; }
+.timeline h3, .notes h3 { font-family: var(--font-data); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; font-weight: 500; }
+#tl { display: block; width: 100%; min-width: 640px; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: 12px; color: var(--muted); padding-top: 6px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; background: var(--c); vertical-align: -1px; }
+
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: #fff; font-size: 12px; padding: 6px 8px; border-radius: 4px; max-width: 240px; z-index: 5; }
+.notes { padding: 14px 16px; font-size: 13px; color: var(--muted); display: grid; gap: 6px; }
+.notes p { margin: 0; max-width: 90ch; }
+.notes ul { margin: 0; padding-left: 18px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="kicker">Honduras · 1824–2026 · 131 terms</div>
+    <h1>Honduras, Term by Term</h1>
+    <p>Every head of state since independence, in order. Step through the terms to see where each one was born and how the map of birthplaces fills in over two centuries.</p>
+  </header>
+
+  <div class="main">
+    <div class="panel mapbox">
+      <svg id="map" role="img" aria-label="Map of Honduras by department showing birthplaces of heads of state up to the selected term"></svg>
+      <div class="maplegend" aria-hidden="true">
+        <div>Heads of state born here, so far</div>
+        <div class="ramp" id="ramp"></div>
+        <div class="ramp"><span class="sw" style="background:#e3dccb"></span> neighbor country of birth</div>
+      </div>
+    </div>
+
+    <div class="side">
+      <article class="panel card" aria-live="polite">
+        <div class="seq" id="seq">Term 1 of 131</div>
+        <h2 id="name">—</h2>
+        <div class="dates" id="dates">—</div>
+        <div class="chips" id="chips"></div>
+        <dl>
+          <dt>Born</dt><dd id="born">—</dd>
+          <dt>Department</dt><dd id="dept">—</dd>
+          <dt>Era</dt><dd id="era">—</dd>
+          <dt>Source</dt><dd id="src">—</dd>
+        </dl>
+      </article>
+
+      <section class="panel controls" aria-label="Controls">
+        <div class="btns">
+          <button id="prev" type="button" aria-label="Previous term">← Previous</button>
+          <button id="play" type="button" aria-pressed="false">Play</button>
+          <button id="next" type="button" aria-label="Next term">Next →</button>
+        </div>
+        <input id="slider" type="range" min="1" max="131" value="1" aria-label="Term number">
+        <div class="eras" id="eras" aria-label="Jump to era"></div>
+        <div class="stats" id="stats"></div>
+      </section>
+    </div>
+  </div>
+
+  <section class="panel timeline" aria-label="Timeline of terms">
+    <h3>Every term, 1824–2026 · tap one to select it</h3>
+    <svg id="tl"></svg>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section class="panel notes">
+    <h3>Sources and notes</h3>
+    <p>Terms: English and Spanish Wikipedia, “List of presidents of Honduras”. Birthplaces researched and validated across several sources by Yanira A. Rivera. Departments: geoBoundaries ADM1 (CC BY 4.0). Neighboring countries: Natural Earth.</p>
+    <p>Births in Honduras are placed at their department, because many towns are unknown; the card still names the town where it is known. Births abroad sit in their country. Where the department is unknown, the point sits at the centre of Honduras with a dashed ring. Collective governments (councils of ministers, provisional governments, juntas) have no single birthplace and sit on their own node off the north coast. On the timeline, a dashed outline marks a de facto term. Party labels are as recorded in the source list.</p>
+    <p id="issues"></p>
+    <p>Made for the #30DayMapChallenge 2026 · Yanira A. Rivera.</p>
+  </section>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
+<script>
+(async () => {
+  const PARTY = {
+    'Liberal': '#b8332f', 'National': '#235a96', 'Conservative': '#6b4f8f', 'Libre': '#7d1f45',
+    'Military': '#5f6b3a', 'Military / National': '#3f5a5c', 'Independent': '#7b8188',
+    'Conservative / Liberal': '#93426a', 'Liberal League': '#c26b3c', 'Republican': '#3f7f7a', 'Not stated': '#a3a9ae'
+  };
+  const partyColor = p => PARTY[p] || '#a3a9ae';
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = id => document.getElementById(id);
+
+  const [P, DEP, NB] = await Promise.all(['data/presidents.json', 'data/departments.geojson', 'data/neighbors.geojson']
+    .map(u => fetch(u).then(r => r.json())));
+  // d3-geo wants clockwise outer rings; geoBoundaries follows RFC 7946 (counter-clockwise), so flip any ring set that d3 reads as "the whole globe minus the shape"
+  const rewind = fc => { fc.features.forEach(f => {
+    if (d3.geoArea(f) > 2 * Math.PI) {
+      const g = f.geometry;
+      if (g.type === 'Polygon') g.coordinates = g.coordinates.map(r => r.slice().reverse());
+      if (g.type === 'MultiPolygon') g.coordinates = g.coordinates.map(p => p.map(r => r.slice().reverse()));
+    }
+  }); return fc; };
+  rewind(DEP); rewind(NB);
+  const T = P.terms;
+  const N = T.length;
+  const BIRTH_ABROAD = new Set(['Nicaragua', 'El Salvador', 'Panama']);
+
+  // ---------- map ----------
+  const W = 760, H = 520;
+  const svg = d3.select('#map').attr('viewBox', `0 0 ${W} ${H}`);
+  const frame = { type: 'Feature', geometry: { type: 'MultiPoint', coordinates: [[-89.6, 12.6], [-83.1, 16.6]] } };
+  const proj = d3.geoMercator().fitExtent([[18, 18], [W - 18, H - 18]], frame);
+  const path = d3.geoPath(proj);
+  svg.append('rect').attr('width', W).attr('height', H).attr('fill', '#dfe8ee');
+  const gNb = svg.append('g'), gDep = svg.append('g'), gArc = svg.append('g'), gPts = svg.append('g'), gCur = svg.append('g');
+
+  gNb.selectAll('path').data(NB.features).join('path').attr('d', path)
+    .attr('fill', '#f1f3f4')
+    .attr('stroke', '#b9c2c9').attr('stroke-width', .6);
+  gNb.selectAll('text').data(NB.features.filter(f => ['Guatemala','El Salvador','Nicaragua'].includes(f.properties.name)))
+    .join('text').attr('transform', d => { const c = proj({ 'Guatemala': [-89.55, 15.5], 'El Salvador': [-89.1, 13.2], 'Nicaragua': [-85.0, 12.9] }[d.properties.name]); return `translate(${c})`; })
+    .attr('text-anchor', 'middle').attr('font-size', 12).attr('fill', '#7b858e').attr('font-style', 'italic').text(d => d.properties.name);
+
+  const depSel = gDep.selectAll('path').data(DEP.features).join('path').attr('d', path)
+    .attr('stroke', '#fff').attr('stroke-width', .9).attr('fill', 'var(--land)');
+
+  const maxCount = d3.max(d3.rollups(T.filter(t => t.dept_key), v => new Set(v.map(t => t.person_key)).size, t => t.dept_key), d => d[1]);
+  const color = d3.scaleSequential().domain([0, maxCount]).interpolator(t => d3.interpolateRgb('#cfe0ee', '#0b3f6b')(t));
+  const ramp = d3.select('#ramp');
+  [1, Math.round(maxCount / 2), maxCount].forEach(v => {
+    const s = ramp.append('span'); s.append('span').attr('class', 'sw').style('background', color(v)); s.append('span').text(' ' + v);
+  });
+
+  // nodes follow the printed flow map (v1.3.0): Honduran births sit at their department's node,
+  // births abroad at their country, unknown departments at the centre, collective governments on their own node
+  const COLLECTIVE = ['council of ministers', 'provisional government', 'military government council', 'junta'];
+  const isCollective = t => COLLECTIVE.some(k => (t.name || '').toLowerCase().includes(k) || (t.status || '').toLowerCase().includes(k));
+  const isDefacto = t => /facto/i.test(t.status || '');
+  const deptNode = new Map(DEP.features.map(f => {
+    const g = f.geometry;
+    const polys = g.type === 'MultiPolygon' ? g.coordinates : [g.coordinates];
+    const big = polys.map(c => ({ type: 'Polygon', coordinates: c })).sort((a, b) => d3.geoArea(b) - d3.geoArea(a))[0];
+    return [f.properties.key, d3.geoCentroid(big)];
+  }));
+  const CENTRE = [-86.3, 15.0], COLLECTIVE_NODE = [-84.3, 16.25];
+  T.forEach(t => {
+    if (isCollective(t)) { t._kind = 'collective'; t._node = COLLECTIVE_NODE; t._nodeKey = 'collective'; t._nodeLabel = 'Collective government'; }
+    else if (t.country_of_birth && t.country_of_birth !== 'Honduras') { t._kind = 'abroad'; t._node = [t.lon, t.lat]; t._nodeKey = 'c:' + t.country_of_birth; t._nodeLabel = t.country_of_birth; }
+    else if (t.dept_key && deptNode.has(t.dept_key)) { t._kind = 'dept'; t._node = deptNode.get(t.dept_key); t._nodeKey = 'd:' + t.dept_key; t._nodeLabel = t.department; }
+    else { t._kind = 'unknown'; t._node = CENTRE; t._nodeKey = 'unknown'; t._nodeLabel = 'Department unknown'; }
+  });
+
+  // point for a term, clamped to the frame with an "off map" flag (Panama)
+  function pt(t) {
+    const [x, y] = proj(t._node);
+    const pad = 22;
+    const off = x < pad || x > W - pad || y < pad || y > H - pad;
+    return { x: Math.max(pad, Math.min(W - pad, x)), y: Math.max(pad, Math.min(H - pad, y)), off };
+  }
+  const unknown = t => t._kind === 'unknown';
+
+  // ---------- timeline ----------
+  const tl = d3.select('#tl');
+  const TW = 1150, TH = 92, x0 = 30, x1 = TW - 12;
+  tl.attr('viewBox', `0 0 ${TW} ${TH}`);
+  const parse = d3.timeParse('%Y-%m-%d');
+  T.forEach(t => { t._s = parse(t.took_office); t._e = t.left_office ? parse(t.left_office) : new Date(2026, 10, 5); });
+  const xs = d3.scaleTime().domain([new Date(1824, 0, 1), new Date(2027, 0, 1)]).range([x0, x1]);
+  const eras = d3.groups(T, t => t.era).map(([era, v]) => ({ era, s: d3.min(v, t => t._s), e: d3.max(v, t => t._e), first: v[0].seq }));
+  tl.append('g').selectAll('rect').data(eras).join('rect')
+    .attr('x', d => xs(d.s)).attr('width', d => Math.max(1, xs(d.e) - xs(d.s))).attr('y', 0).attr('height', 18)
+    .attr('fill', (d, i) => i % 2 ? '#e7ecef' : '#f3f5f6');
+  tl.append('g').selectAll('text').data(eras).join('text')
+    .attr('x', d => xs(d.s) + 4).attr('y', 13).attr('font-size', 11).attr('fill', '#5d6874')
+    .text(d => d.era.replace(/\s*\(.*\)/, '').replace(' era', '')).each(function (d) {
+      const w = xs(d.e) - xs(d.s) - 8; if (this.getComputedTextLength() > w) d3.select(this).text('');
+    });
+  const bars = tl.append('g').selectAll('rect').data(T).join('rect')
+    .attr('class', 'term').attr('tabindex', 0).attr('role', 'button')
+    .attr('aria-label', t => `${t.seq}. ${t.name}, ${t.took_office?.slice(0, 4)}`)
+    .attr('x', t => xs(t._s)).attr('width', t => Math.max(2, xs(t._e) - xs(t._s)))
+    .attr('y', 26).attr('height', 30).attr('fill', t => partyColor(t.party)).attr('stroke', '#fff').attr('stroke-width', .4)
+    .style('cursor', 'pointer');
+  const marker = tl.append('path').attr('fill', 'var(--ink)');
+  tl.append('g').attr('transform', 'translate(0,60)').call(d3.axisBottom(xs).ticks(d3.timeYear.every(25)).tickSizeOuter(0))
+    .call(g => g.selectAll('text').attr('font-family', 'IBM Plex Mono, monospace').attr('font-size', 11).attr('fill', '#5d6874'))
+    .call(g => g.selectAll('line,path').attr('stroke', '#c9d0d6'));
+
+  const parties = [...new Set(T.map(t => t.party))].sort((a, b) => d3.sum(T, t => t.party === b) - d3.sum(T, t => t.party === a));
+  d3.select('#legend').selectAll('span').data(parties).join('span').style('--c', partyColor).text(d => d || 'Not stated');
+
+  const tip = $('tip');
+  bars.on('mousemove', (ev, t) => {
+    tip.hidden = false;
+    tip.textContent = `${t.seq}. ${t.name} · ${fmtRange(t)} · ${t.party || ''}`;
+    tip.style.left = (ev.pageX + 12) + 'px'; tip.style.top = (ev.pageY - 34) + 'px';
+  }).on('mouseleave', () => { tip.hidden = true; })
+    .on('click', (ev, t) => { stop(); go(t.seq - 1); })
+    .on('keydown', (ev, t) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); stop(); go(t.seq - 1); } });
+
+  // ---------- era buttons ----------
+  d3.select('#eras').selectAll('button').data(eras).join('button').attr('type', 'button')
+    .text(d => d.era.match(/\((.*)\)/)?.[1] || d.era).attr('title', d => d.era)
+    .on('click', (ev, d) => { stop(); go(d.first - 1); });
+
+  // ---------- formatting ----------
+  const fmtDate = d3.timeFormat('%-d %b %Y');
+  function fmtRange(t) { return `${fmtDate(t._s)} – ${t.left_office ? fmtDate(t._e) : 'present'}`; }
+  function fmtDur(days) {
+    if (days == null) return 'in office';
+    if (days < 60) return `${days} days`;
+    const y = Math.floor(days / 365.25), m = Math.round((days - y * 365.25) / 30.44);
+    return [y ? `${y} yr` : '', m ? `${m} mo` : ''].filter(Boolean).join(' ');
+  }
+
+  // ---------- state ----------
+  let i = 0, timer = null;
+  function go(k) {
+    i = Math.max(0, Math.min(N - 1, k));
+    const t = T[i], upto = T.slice(0, i + 1);
+
+    // choropleth: distinct people born in each department so far
+    const counts = d3.rollup(upto.filter(u => u.dept_key), v => new Set(v.map(u => u.person_key)).size, u => u.dept_key);
+    depSel.transition().duration(reduce ? 0 : 300)
+      .attr('fill', f => counts.get(f.properties.key) ? color(counts.get(f.properties.key)) : 'var(--land)');
+    gNb.selectAll('path').attr('fill', d => {
+      const born = upto.some(u => u.country_of_birth === d.properties.name);
+      return born ? '#e3dccb' : '#f1f3f4';
+    });
+
+    // earlier birthplaces as small dots (one per place)
+    const places = d3.groups(upto, u => u._nodeKey).map(([, v]) => v[v.length - 1]);
+    gPts.selectAll('circle').data(places, d => d._nodeKey).join('circle')
+      .attr('cx', d => pt(d).x).attr('cy', d => pt(d).y).attr('r', 3.5)
+      .attr('fill', d => d._kind === 'collective' ? '#f1f3f4' : '#fff').attr('stroke', '#1b2430').attr('stroke-width', 1)
+      .attr('stroke-dasharray', d => d._kind === 'collective' ? '2 1.5' : null);
+
+    // arc from previous birthplace
+    gArc.selectAll('*').remove();
+    if (i > 0) {
+      const a = pt(T[i - 1]), b = pt(t);
+      const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
+      let d;
+      if (dist < 4) d = `M${a.x},${a.y} c -22,-34 22,-34 0,0`;
+      else { const mx = (a.x + b.x) / 2 - dy * .25, my = (a.y + b.y) / 2 + dx * .25 - dist * .15; d = `M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}`; }
+      const p = gArc.append('path').attr('d', d).attr('fill', 'none').attr('stroke', 'var(--flag)').attr('stroke-width', 2).attr('stroke-linecap', 'round');
+      if (!reduce) { const L = p.node().getTotalLength(); p.attr('stroke-dasharray', `${L} ${L}`).attr('stroke-dashoffset', L).transition().duration(600).attr('stroke-dashoffset', 0); }
+    }
+
+    // current marker
+    gCur.selectAll('*').remove();
+    const c = pt(t);
+    gCur.append('circle').attr('cx', c.x).attr('cy', c.y).attr('r', 9).attr('fill', partyColor(t.party)).attr('stroke', '#fff').attr('stroke-width', 2);
+    if (unknown(t) || t._kind === 'collective') gCur.append('circle').attr('cx', c.x).attr('cy', c.y).attr('r', 15).attr('fill', 'none').attr('stroke', 'var(--ink)').attr('stroke-dasharray', '3 3');
+    const label = t._nodeLabel;
+    const lab = (c.off ? `${label} (off map) ↘` : label);
+    const anchor = c.x > W * .7 ? 'end' : 'start', lx = c.x + (anchor === 'end' ? -14 : 14);
+    gCur.append('text').attr('x', lx).attr('y', c.y + 4).attr('text-anchor', anchor).attr('font-size', 13).attr('font-weight', 600)
+      .attr('paint-order', 'stroke').attr('stroke', '#fff').attr('stroke-width', 4).attr('fill', 'var(--ink)').text(lab);
+
+    // card
+    $('seq').textContent = `Term ${t.seq} of ${N}`;
+    $('name').textContent = t.name;
+    $('dates').textContent = `${fmtRange(t)} · ${fmtDur(t.mandate_days)}`;
+    const chips = d3.select('#chips').html('');
+    chips.append('span').attr('class', 'chip party').style('background', partyColor(t.party)).text(t.party || 'Not stated');
+    if (t.status) chips.append('span').attr('class', 'chip').text(t.status);
+    $('born').textContent = t._kind === 'collective' ? 'Not applicable (several members)' : ([t.birthplace, t.country_of_birth !== 'Honduras' ? t.country_of_birth : null].filter(Boolean).join(', ') || 'Unknown');
+    $('dept').textContent = t._kind === 'collective' ? 'Collective government (no single birthplace)' : t._kind === 'abroad' ? `Born abroad (${t.country_of_birth})` : (t._kind === 'dept' ? t.department : 'Unknown (placed at the centre of Honduras)');
+    $('era').textContent = t.era;
+    const src = $('src'); src.textContent = '';
+    if (t.source_url) { const a = document.createElement('a'); a.href = t.source_url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = decodeURIComponent(t.source_url.replace(/^https:\/\/(\w+)\.wikipedia\.org\/wiki\//, '$1.wikipedia: ')).replace(/_/g, ' '); src.append(a); }
+    else src.textContent = 'List of presidents of Honduras (Wikipedia)';
+
+    // stats
+    const people = new Set(upto.map(u => u.person_key)).size;
+    const top = [...counts].sort((a, b) => b[1] - a[1])[0];
+    const topName = top ? DEP.features.find(f => f.properties.key === top[0]).properties.name : '—';
+    $('stats').innerHTML = `So far: <b>${i + 1}</b> terms · <b>${people}</b> different people · most born in <b>${topName}</b>${top ? ` (${top[1]})` : ''}`;
+
+    // timeline + slider
+    bars.attr('opacity', u => u.seq - 1 <= i ? 1 : .28)
+      .attr('stroke', u => u.seq - 1 === i || isDefacto(u) ? 'var(--ink)' : '#fff')
+      .attr('stroke-width', u => u.seq - 1 === i ? 1.5 : (isDefacto(u) ? .9 : .4))
+      .attr('stroke-dasharray', u => isDefacto(u) && u.seq - 1 !== i ? '2 2' : null);
+    const mx = xs(t._s) + Math.max(2, xs(t._e) - xs(t._s)) / 2;
+    marker.attr('d', `M${mx},24 l-5,-6 h10 z`);
+    $('slider').value = i + 1;
+  }
+
+  // ---------- controls ----------
+  function stop() { clearInterval(timer); timer = null; $('play').setAttribute('aria-pressed', 'false'); $('play').textContent = 'Play'; }
+  function play() {
+    if (timer) return stop();
+    if (i >= N - 1) go(0);
+    $('play').setAttribute('aria-pressed', 'true'); $('play').textContent = 'Pause';
+    timer = setInterval(() => { if (i >= N - 1) return stop(); go(i + 1); }, reduce ? 1200 : 750);
+  }
+  $('play').addEventListener('click', play);
+  $('prev').addEventListener('click', () => { stop(); go(i - 1); });
+  $('next').addEventListener('click', () => { stop(); go(i + 1); });
+  $('slider').addEventListener('input', e => { stop(); go(+e.target.value - 1); });
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input,button,.term')) return;
+    if (e.key === 'ArrowRight') { stop(); go(i + 1); } if (e.key === 'ArrowLeft') { stop(); go(i - 1); }
+  });
+
+  const iss = P.issues;
+  $('issues').textContent = iss.length ? `Data checks: ${iss.length} source codes flagged for review (terms ${[...new Set(iss.map(x => x.seq))].join(', ')}); values are shown as recorded.` : '';
+  go(0);
+})();
+</script>
+
+</body>
+</html>
