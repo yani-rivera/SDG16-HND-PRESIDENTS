@@ -38,8 +38,6 @@ header h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp
 header p { margin: 0; max-width: 68ch; color: var(--muted); }
 
 .main { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-@media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
-@media (max-width: 520px) { .maplegend { position: static; background: none; padding: 6px 10px 10px; } }
 .panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; }
 .mapbox { position: relative; min-width: 0; }
 #map { display: block; width: 100%; height: auto; }
@@ -75,7 +73,8 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
 .stats { font-size: 13px; color: var(--muted); }
 .stats b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-.timeline { padding: 12px 14px 8px; overflow-x: auto; }
+.timeline { padding: 12px 14px 8px; min-width: 0; }
+.tlscroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .timeline h3, .notes h3 { font-family: var(--font-data); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; font-weight: 500; }
 #tl { display: block; width: 100%; min-width: 640px; height: auto; }
 .legend { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: 12px; color: var(--muted); padding-top: 6px; }
@@ -85,6 +84,29 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
 .notes { padding: 14px 16px; font-size: 13px; color: var(--muted); display: grid; gap: 6px; }
 .notes p { margin: 0; max-width: 90ch; }
 .notes ul { margin: 0; padding-left: 18px; }
+.nowline { display: none; }
+
+/* Phones and narrow windows: map, then the name of the current term and the step buttons
+   straight under it, so the map and the controls are on screen together. */
+@media (max-width: 860px) {
+  body { padding-block: 14px 28px; }
+  .wrap { gap: 14px; }
+  header p { font-size: 14px; }
+  .main { grid-template-columns: 1fr; gap: 12px; }
+  .side { display: contents; }
+  .mapbox { order: 1; }
+  .controls { order: 2; }
+  .card { order: 3; }
+  .maplegend { position: static; background: none; padding: 6px 10px 8px; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 11px; }
+  .maplegend .long { display: none; }
+  .nowline { display: block; padding: 8px 10px 0; font-size: 14px; font-weight: 600; line-height: 1.3; }
+  .nowline span { display: block; font: 400 12px var(--font-data); color: var(--muted); }
+  .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+  button { min-height: 44px; }
+  .eras button { min-height: 36px; }
+  #slider { height: 32px; }
+  #tl { min-width: 1500px; }
+}
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -100,11 +122,12 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
   <div class="main">
     <div class="panel mapbox">
       <svg id="map" role="img" aria-label="Map of Honduras by department showing birthplaces of heads of state up to the selected term"></svg>
+      <div class="nowline" id="now" aria-hidden="true"></div>
       <div class="maplegend" aria-hidden="true">
         <div>Heads of state born here, so far</div>
         <div class="ramp" id="ramp"></div>
         <div class="ramp"><span class="sw" style="background:#e3dccb"></span> neighbor country of birth</div>
-        <div class="ramp"><svg width="14" height="14" viewBox="-7 -7 14 14"><path d="M0,-6.5L1.6,-2.1L6.2,-2L2.5,0.8L3.8,5.3L0,2.6L-3.8,5.3L-2.5,0.8L-6.2,-2L-1.6,-2.1Z" fill="currentColor"/></svg> capital at the time: Comayagua until 30 Oct 1880, then Tegucigalpa</div>
+        <div class="ramp"><svg width="14" height="14" viewBox="-7 -7 14 14"><path d="M0,-6.5L1.6,-2.1L6.2,-2L2.5,0.8L3.8,5.3L0,2.6L-3.8,5.3L-2.5,0.8L-6.2,-2L-1.6,-2.1Z" fill="currentColor"/></svg> <span>capital at the time<span class="long">: Comayagua until 30 Oct 1880, then Tegucigalpa</span></span></div>
       </div>
     </div>
 
@@ -136,8 +159,8 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
   </div>
 
   <section class="panel timeline" aria-label="Timeline of terms">
-    <h3>Every term, 1824–2026 · tap one to select it</h3>
-    <svg id="tl"></svg>
+    <h3>Every term, 1824–2026 · tap one to select it<span id="swipe"></span></h3>
+    <div class="tlscroll"><svg id="tl"></svg></div>
     <div class="legend" id="legend"></div>
   </section>
 
@@ -180,6 +203,8 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
 
   // ---------- map ----------
   const W = 760, H = 520;
+  const NARROW = matchMedia('(max-width: 860px)').matches;
+  const S = NARROW ? Math.min(1.9, Math.max(1, 640 / Math.max(320, innerWidth))) : 1;   // size factor for text and markers
   const svg = d3.select('#map').attr('viewBox', `0 0 ${W} ${H}`);
   const frame = { type: 'Feature', geometry: { type: 'MultiPoint', coordinates: [[-89.6, 12.6], [-83.1, 16.6]] } };
   const proj = d3.geoMercator().fitExtent([[18, 18], [W - 18, H - 18]], frame);
@@ -192,7 +217,7 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
     .attr('stroke', '#b9c2c9').attr('stroke-width', .6);
   gNb.selectAll('text').data(NB.features.filter(f => ['Guatemala','El Salvador','Nicaragua'].includes(f.properties.name)))
     .join('text').attr('transform', d => { const c = proj({ 'Guatemala': [-89.55, 15.5], 'El Salvador': [-89.1, 13.2], 'Nicaragua': [-85.0, 12.9] }[d.properties.name]); return `translate(${c})`; })
-    .attr('text-anchor', 'middle').attr('font-size', 12).attr('fill', '#7b858e').attr('font-style', 'italic').text(d => d.properties.name);
+    .attr('text-anchor', 'middle').attr('font-size', 12 * S).attr('fill', '#7b858e').attr('font-style', 'italic').text(d => d.properties.name);
 
   const depSel = gDep.selectAll('path').data(DEP.features).join('path').attr('d', path)
     .attr('stroke', '#fff').attr('stroke-width', .9).attr('fill', 'var(--land)');
@@ -213,12 +238,12 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
     { name: 'Tegucigalpa', lonlat: [-87.206, 14.072], from: CAPITAL_MOVE }
   ];
   const capitalAt = d => CAPITALS.find(c => (!c.from || d >= c.from) && (!c.until || d < c.until));
-  const star = d3.symbol().type(d3.symbolStar).size(150)();
+  const star = d3.symbol().type(d3.symbolStar).size(150 * S * S)();
   const capSel = gCap.selectAll('g').data(CAPITALS).join('g')
     .attr('transform', c => `translate(${proj(c.lonlat)})`);
   capSel.append('path').attr('d', star).attr('stroke-width', 1.2).attr('stroke-linejoin', 'round');
-  capSel.append('text').attr('x', 10).attr('y', -8).attr('font-size', 11.5).attr('font-weight', 600)
-    .attr('paint-order', 'stroke').attr('stroke', '#fff').attr('stroke-width', 3.5).text(c => c.name);
+  capSel.append('text').attr('x', 10 * S).attr('y', -8 * S).attr('font-size', 11.5 * S).attr('font-weight', 600)
+    .attr('paint-order', 'stroke').attr('stroke', '#fff').attr('stroke-width', 3.5 * S).text(c => c.name);
 
   // nodes follow the printed flow map (v1.3.0): Honduran births sit at their department's node,
   // births abroad at their country, unknown departments at the centre, collective governments on their own node
@@ -242,7 +267,7 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
   // point for a term, clamped to the frame with an "off map" flag (Panama)
   function pt(t) {
     const [x, y] = proj(t._node);
-    const pad = 22;
+    const pad = 22 * S;
     const off = x < pad || x > W - pad || y < pad || y > H - pad;
     return { x: Math.max(pad, Math.min(W - pad, x)), y: Math.max(pad, Math.min(H - pad, y)), off };
   }
@@ -279,13 +304,21 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
   d3.select('#legend').selectAll('span').data(parties).join('span').style('--c', partyColor).text(d => d || 'Not stated');
 
   const tip = $('tip');
-  bars.on('mousemove', (ev, t) => {
+  if (matchMedia('(hover: hover)').matches) bars.on('mousemove', (ev, t) => {
     tip.hidden = false;
     tip.textContent = `${t.seq}. ${t.name} · ${fmtRange(t)} · ${t.party || ''}`;
     tip.style.left = (ev.pageX + 12) + 'px'; tip.style.top = (ev.pageY - 34) + 'px';
-  }).on('mouseleave', () => { tip.hidden = true; })
-    .on('click', (ev, t) => { stop(); go(t.seq - 1); })
-    .on('keydown', (ev, t) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); stop(); go(t.seq - 1); } });
+  }).on('mouseleave', () => { tip.hidden = true; });
+  // the bars of short terms are only a pixel or two wide, so a click or tap anywhere on the strip selects the term at (or nearest to) that date
+  function nearestTerm(date) {
+    let best = 0, bestGap = Infinity;
+    T.forEach((t, k) => { const gap = date < t._s ? t._s - date : date > t._e ? date - t._e : 0; if (gap <= bestGap) { best = k; bestGap = gap; } });
+    return best;
+  }
+  tl.style('cursor', 'pointer').on('click', ev => { stop(); go(nearestTerm(xs.invert(d3.pointer(ev, tl.node())[0]))); });
+  const tlBox = tl.node().parentNode;
+  if (NARROW) $('swipe').textContent = ' · swipe sideways for more years';
+  bars.on('keydown', (ev, t) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); stop(); go(t.seq - 1); } });
 
   // ---------- era buttons ----------
   d3.select('#eras').selectAll('button').data(eras).join('button').attr('type', 'button')
@@ -327,8 +360,8 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
     // earlier birthplaces as small dots (one per place)
     const places = d3.groups(upto, u => u._nodeKey).map(([, v]) => v[v.length - 1]);
     gPts.selectAll('circle').data(places, d => d._nodeKey).join('circle')
-      .attr('cx', d => pt(d).x).attr('cy', d => pt(d).y).attr('r', 3.5)
-      .attr('fill', d => d._kind === 'collective' ? '#f1f3f4' : '#fff').attr('stroke', '#1b2430').attr('stroke-width', 1)
+      .attr('cx', d => pt(d).x).attr('cy', d => pt(d).y).attr('r', 3.5 * S)
+      .attr('fill', d => d._kind === 'collective' ? '#f1f3f4' : '#fff').attr('stroke', '#1b2430').attr('stroke-width', S)
       .attr('stroke-dasharray', d => d._kind === 'collective' ? '2 1.5' : null);
 
     // arc from previous birthplace
@@ -339,23 +372,26 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
       let d;
       if (dist < 4) d = `M${a.x},${a.y} c -22,-34 22,-34 0,0`;
       else { const mx = (a.x + b.x) / 2 - dy * .25, my = (a.y + b.y) / 2 + dx * .25 - dist * .15; d = `M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}`; }
-      const p = gArc.append('path').attr('d', d).attr('fill', 'none').attr('stroke', 'var(--flag)').attr('stroke-width', 2).attr('stroke-linecap', 'round');
+      const p = gArc.append('path').attr('d', d).attr('fill', 'none').attr('stroke', 'var(--flag)').attr('stroke-width', 2 * S).attr('stroke-linecap', 'round');
       if (!reduce) { const L = p.node().getTotalLength(); p.attr('stroke-dasharray', `${L} ${L}`).attr('stroke-dashoffset', L).transition().duration(600).attr('stroke-dashoffset', 0); }
     }
 
     // current marker
     gCur.selectAll('*').remove();
     const c = pt(t);
-    gCur.append('circle').attr('cx', c.x).attr('cy', c.y).attr('r', 9).attr('fill', partyColor(t.party)).attr('stroke', '#fff').attr('stroke-width', 2);
-    if (unknown(t) || t._kind === 'collective') gCur.append('circle').attr('cx', c.x).attr('cy', c.y).attr('r', 15).attr('fill', 'none').attr('stroke', 'var(--ink)').attr('stroke-dasharray', '3 3');
+    gCur.append('circle').attr('cx', c.x).attr('cy', c.y).attr('r', 9 * S).attr('fill', partyColor(t.party)).attr('stroke', '#fff').attr('stroke-width', 2 * S);
+    if (unknown(t) || t._kind === 'collective') gCur.append('circle').attr('cx', c.x).attr('cy', c.y).attr('r', 15 * S).attr('fill', 'none').attr('stroke', 'var(--ink)').attr('stroke-dasharray', '3 3');
     const label = t._nodeLabel;
     const lab = (c.off ? `${label} (off map) ↘` : label);
-    const anchor = c.x > W * .7 ? 'end' : 'start', lx = c.x + (anchor === 'end' ? -14 : 14);
-    gCur.append('text').attr('x', lx).attr('y', c.y + 4).attr('text-anchor', anchor).attr('font-size', 13).attr('font-weight', 600)
-      .attr('paint-order', 'stroke').attr('stroke', '#fff').attr('stroke-width', 4).attr('fill', 'var(--ink)').text(lab);
+    const anchor = c.x > W * .7 ? 'end' : 'start', lx = c.x + (anchor === 'end' ? -14 : 14) * S;
+    gCur.append('text').attr('x', lx).attr('y', c.y + 4 * S).attr('text-anchor', anchor).attr('font-size', 13 * S).attr('font-weight', 600)
+      .attr('paint-order', 'stroke').attr('stroke', '#fff').attr('stroke-width', 4 * S).attr('fill', 'var(--ink)').text(lab);
 
     // card
     $('seq').textContent = `Term ${t.seq} of ${N}`;
+    const yr = t.took_office.slice(0, 4), yr2 = t.left_office ? t.left_office.slice(0, 4) : 'present';
+    const sub = document.createElement('span'); sub.textContent = `Term ${t.seq} of ${N} · ${yr === yr2 ? yr : yr + '–' + yr2} · ${t.party || 'Not stated'}`;
+    $('now').replaceChildren(t.name, sub);
     $('name').textContent = t.name;
     $('dates').textContent = `${fmtRange(t)} · ${fmtDur(t.mandate_days)}`;
     const chips = d3.select('#chips').html('');
@@ -382,6 +418,11 @@ button:focus-visible, input:focus-visible, .term:focus-visible { outline: 2px so
       .attr('stroke-dasharray', u => isDefacto(u) && u.seq - 1 !== i ? '2 2' : null);
     const mx = xs(t._s) + Math.max(2, xs(t._e) - xs(t._s)) / 2;
     marker.attr('d', `M${mx},24 l-5,-6 h10 z`);
+    // keep the selected term in view when the strip is wider than the screen
+    if (tlBox.scrollWidth > tlBox.clientWidth + 1) {
+      const want = mx / TW * tl.node().getBoundingClientRect().width - tlBox.clientWidth / 2;
+      tlBox.scrollTo({ left: Math.max(0, want), behavior: reduce || timer ? 'auto' : 'smooth' });
+    }
     $('slider').value = i + 1;
   }
 
